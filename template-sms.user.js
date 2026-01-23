@@ -488,7 +488,7 @@ async function addSignatureButtons() {
     // we want multiple elms, but waitForElm will only give us one... once we KNOW it's there though, we can just querySelectorAll
     await waitForElm(selector)
     let parents = document.getElementsByTagName(selector)
-    console.log(`found ${parents.length} parent elms`)
+    console.debug(`found ${parents.length} parent elms`)
 
     if (!parents.length) {
         console.warn("# can't add sig buttons: no parents...")
