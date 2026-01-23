@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        Template SMS for Google Messages
 // @description Save SMS templates within Google Messages
-// @version     1.1
+// @version     1.2
 // @updateURL   https://raw.githubusercontent.com/drylynch/template-sms-for-google-messages/main/template-sms.user.js
 // @downloadURL https://raw.githubusercontent.com/drylynch/template-sms-for-google-messages/main/template-sms.user.js
 // @icon        https://ssl.gstatic.com/android-messages-web/images/2022.3/2x/messages_2022_96dp.png
@@ -32,7 +32,7 @@ const SVG_EDIT_ICON = escapeHTMLPolicy.createHTML(
 )
 const SVG_DELETE_ICON = escapeHTMLPolicy.createHTML(
 `<svg viewBox='0 0 24 24'>
-    <path d='M4 6H20M16 6L15.7294 5.18807C15.4671 4.40125 15.3359 4.00784 15.0927 3.71698C14.8779 3.46013 14.6021 3.26132 14.2905 3.13878C13.9376 3 13.523 3 12.6936 3H11.3064C10.477 3 10.0624 3 9.70951 3.13878C9.39792 3.26132 9.12208 3.46013 8.90729 3.71698C8.66405 4.00784 8.53292 4.40125 8.27064 5.18807L8 6M18 6V16.2C18 17.8802 18 18.7202 17.673 19.362C17.3854 19.9265 16.9265 20.3854 16.362 20.673C15.7202 21 14.8802 21 13.2 21H10.8C9.11984 21 8.27976 21 7.63803 20.673C7.07354 20.3854 6.6146 19.9265 6.32698 19.362C6 18.7202 6 17.8802 6 16.2V6M14 10V17M10 10V17' stroke='#000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' fill='none'/>
+    <path d='M4 6H20M16 6L15.7294 5.18807C15.4671 4.40125 15.3359 4.00784 15.0927 3.71698C14.8779 3.46013 14.6021 3.26132 14.2905 3.13878C13.9376 3 13.523 3 12.6936 3H11.3064C10.477 3 10.0624 3 9.70951 3.13878C9.39792 3.26132 9.12208 3.46013 8.90729 3.71698C8.66405 4.00784 8.53292 4.40125 8.27064 5.18807L8 6M18 6V16.2C18 17.8802 18 18.7202 17.673 19.362C17.3854 19.9265 16.9265 20.3854 16.362 20.673C15.7202 21 14.8802 21 13.2 21H10.8C9.11984 21 8.27976 21 7.63803 20.673C7.07354 20.3854 6.6146 19.9265 6.32698 19.362C6 18.7202 6 17.8802 6 16.2V6M14 10V17M10 10V17' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' fill='none'/>
 </svg>`
 )
 
@@ -71,8 +71,8 @@ const VIEWS = {
     edit: 'edit',  // edit existing template
 }
 
-// wow so pretty
-const ALL_CSS = `:root {
+// styles
+const CSS_MSGBOX_HEIGHT = `:root {
     --force-textarea-height-px: ${msgboxHeight}px;
     --bottom-anchor-offset-inline: 45px;
     --bottom-anchor-offset-stacked: 90px;
@@ -96,65 +96,159 @@ mws-autosize-textarea {
         padding-bottom: calc(var(--force-textarea-height-px) + var(--bottom-anchor-offset-stacked)) !important;
     }
 }
+`
+
+const CSS_AESTHETICS = `/* universals */
+body #sig-selector {
+    --box-shadow: 0 0 2px rgba(0, 0, 0, .3), 0 2px 16px rgba(0, 0, 0, .6);
+
+    --almost-black: #202124;
+    --superdark-grey: #2A2B2E;
+    --dark-grey: #5F6368;
+    --medium-dark-grey: #959595;
+    --medium-light-grey: #ccc;
+    --light-grey: #F1F3F4;
+
+    --dark-blue: #1E7AE3;
+    --medium-blue: #4e8dd5;
+    --light-blue: #8ab4f8;
+
+    --tab-active-light: #E4EFFB;
+    --tab-hover-light: #F6FAFE;
+
+    --tab-active-dark: #464E58;
+    --tab-hover-dark: #44484B;
+
+    --tab-active-highcontrast: var(--tab-active-light);
+    --tab-hover-highcontrast: var(--tab-hover-light);
+
+    --border-light: #DADCE0;
+    --border-dark: #5f6368;
+    --border-highcontrast: black;
+
+
+    box-shadow: var(--box-shadow);
+
+    .msg-controls > * {
+        border: 0px solid transparent;
+    }
+}
+
 
 /* light theme (no body class) */
-body {
-    --box-bg-color: white;
-    --box-shadow: 0 0 2px rgba(0, 0, 0, .3), 0 2px 16px rgba(0, 0, 0, .6);
-    --border-color: #DADCE0;
+body #sig-selector {
+    --box-bg: white;
+    --box-font: black;
+    --box-border: var(--border-light);
 
-    --inactive-strong: #5F6368;
-    --inactive-light: #bbb;
+    --tab-active-bg: var(--tab-active-light);
+    --tab-hover-bg: var(--tab-hover-light);
+    --tab-active: var(--dark-blue);
+    --tab-border: var(--medium-blue);
 
-    --active-strong: #1E7AE3;
-    --active-light: #8ab4f8;
-    --active-bg: #E4EFFB;
+    --msg-title-bg: var(--medium-blue);
+    --msg-title-bg-hover: var(--dark-blue);
+    --msg-title-font: white;
 
-    --hover-bg: #F6FAFE;
+    --msg-body-bg: var(--light-grey);
+    --msg-body-bg-hover: var(--light-blue);
+    --msg-body-font: black;
 
-    --strong-font-color: white;
-    --light-font-color: black;
-    --body-font-color: var(--inactive-strong);
+    --msg-controls-bg: var(--light-grey);
+    --msg-controls-bg-hover: var(--light-blue);
+    --msg-controls-bg-active: var(--medium-blue);
+    --msg-controls-fill: var(--superdark-grey);
+
+    --input-bg: white;
+    --input-font: black;
+    --input-border: var(--medium-dark-grey);
+
+    --scrollbar-main: var(--dark-grey);
 }
 
 /* dark theme */
 body.dark-theme #sig-selector {
-    --box-bg-color: #3c4043;
-    --box-shadow: 0 0 2px rgba(0, 0, 0, .3), 0 2px 16px rgba(0, 0, 0, .6);
-    --border-color: #5f6368;
 
-    --inactive-strong: #959595;
-    --inactive-light: #DADCE0;
+    --box-bg: #3c4043;
+    --box-font: var(--medium-light-grey);
+    --box-border: var(--border-dark);
 
-    --active-strong: #4f8ef4;
-    --active-light: #8ab4f8;
-    --active-bg: #464E58;
+    --tab-active-bg: var(--tab-active-dark);
+    --tab-hover-bg: var(--tab-hover-dark);
+    --tab-active: var(--light-blue);
+    --tab-border: var(--medium-blue);
 
-    --hover-bg: #44484B;
+    --msg-title-bg: var(--almost-black);
+    --msg-title-bg-hover: var(--dark-blue);
+    --msg-title-font: var(--light-grey);
 
-    --strong-font-color: black;
-    --light-font-color: black;
-    --body-font-color: var(--inactive-light);
+    --msg-body-bg: var(--superdark-grey);
+    --msg-body-bg-hover: var(--medium-blue);
+    --msg-body-font: var(--light-grey);
+
+    --msg-controls-bg: var(--superdark-grey);
+    --msg-controls-bg-hover: var(--medium-blue);
+    --msg-controls-bg-active: var(--dark-blue);
+    --msg-controls-fill: var(--light-grey);
+
+    --scrollbar-main: var(--medium-light-grey);
+
+    --input-bg: var(--superdark-grey);
+    --input-font: var(--light-grey);
+    --input-border: transparent;
+
 }
 
 /* high contrast theme */
 body.high-contrast-theme #sig-selector {
-    --box-bg-color: white;
-    --box-shadow: 0 0 2px rgba(0, 0, 0, .3), 0 2px 16px rgba(0, 0, 0, .6);
-    --border-color: black;
+    --box-bg: white;
+    --box-font: black;
+    --box-border: var(--border-highcontrast);
 
-    --inactive-strong: black;
-    --inactive-light: #ddd;
+    --tab-active-bg: var(--tab-active-highcontrast);
+    --tab-hover-bg: var(--tab-hover-highcontrast);
+    --tab-active: var(--dark-blue);
+    --tab-border: var(--medium-blue);
 
-    --active-strong: #1E7AE3;
-    --active-light: #8ab4f8;
-    --active-bg: #E4EFFB;
+    --msg-title-bg: var(--medium-blue);
+    --msg-title-bg-hover: var(--dark-blue);
+    --msg-title-font: white;
 
-    --hover-bg: #F6FAFE;
+    --msg-body-bg: white;
+    --msg-body-bg-hover: var(--light-blue);
+    --msg-body-font: black;
 
-    --strong-font-color: white;
-    --light-font-color: black;
-    --body-font-color: var(--inactive-strong);
+    --msg-controls-bg: white;
+    --msg-controls-bg-hover: var(--light-blue);
+    --msg-controls-bg-active: var(--medium-blue);
+    --msg-controls-fill: black;
+
+    --input-bg: white;
+    --input-font: black;
+    --input-border: black;;
+
+    --scrollbar-main: black;
+
+
+    /* extra stuff for high contrast theme, to mirror vanilla */
+
+    box-shadow: none;
+
+    border: 1px solid black;
+    .msg-preview > * {
+        border: 1px solid black;
+    }
+    .msg-preview :first-child {
+        border-bottom: 0;
+    }
+    .msg-controls > *  {
+        border: 1px solid black;
+    }
+    .mdc-button {
+        border: 1px black solid;
+        box-shadow: none;
+    }
+
 }
 
 
@@ -163,7 +257,7 @@ body.high-contrast-theme #sig-selector {
     font-family: 'Roboto';
     font-style: normal;
     user-select: none;
-    font-size: 1em;
+    font-size: 14px;
 }
 
 
@@ -173,12 +267,11 @@ body.high-contrast-theme #sig-selector {
     flex-direction: column;
     position: absolute;
     z-index: 999;
-    width: 400px;
+    width: 350px;
     height: 340px;
     border-radius: 20px;
-
-    background-color: var(--box-bg-color);
-    box-shadow: var(--box-shadow);
+    background-color: var(--box-bg);
+    color: var(--box-font);
 
 
     /* top tabs */
@@ -187,8 +280,7 @@ body.high-contrast-theme #sig-selector {
         flex-direction: row;
         padding: 0px 20px;
         gap: 8px;
-        color: var(--body-font-color);
-        border-bottom: 1px solid var(--border-color);
+        border-bottom: 1px solid var(--box-border);
     }
     nav > div {
         padding: 8px 6px;
@@ -197,12 +289,12 @@ body.high-contrast-theme #sig-selector {
     }
     nav > div:hover {
         cursor: pointer;
-        background-color: var(--hover-bg);
+        background-color: var(--tab-hover-bg);
     }
     nav > div.active {
-        color: var(--active-strong);
-        border-bottom: 2px var(--active-strong) solid;
-        background-color: var(--active-bg);
+        color: var(--tab-active);
+        border-bottom: 2px var(--tab-active) solid;
+        background-color: var(--tab-active-bg);
     }
 
 
@@ -228,8 +320,7 @@ body.high-contrast-theme #sig-selector {
         content: "Click the 'Add New' button to add a new SMS template";
         font-size: 1.2em;
         text-align: center;
-        padding: 0 70px;
-        color: var(--inactive-strong);
+        padding: 0 60px;
     }
 
     #section-templates {
@@ -243,7 +334,7 @@ body.high-contrast-theme #sig-selector {
             gap: 2px;
 
             /* no handles till i figure out how to do it nicely... no reordering for now... */
-            .handle {
+/*             .handle {
                 width: 30px;
                 background-color: pink;
             }
@@ -252,17 +343,17 @@ body.high-contrast-theme #sig-selector {
             }
             .handle:active {
                 cursor: grabbing;
-            }
+            } */
         }
 
-        article:has(.handle:hover) {
+/*         article:has(.handle:hover) {
             --hover-distance: 2px;
             position: relative;
             bottom: var(--hover-distance);
             left: var(--hover-distance);
             margin-bottom: var(--hover-distance);
-            margin-left: calc(6px + var(--hover-distance));  /* +6px is something to do with the existing margin... */
-        }
+            margin-left: calc(6px + var(--hover-distance));
+        } */
 
         .msg-preview {
             min-width: 0;  /* prevent horizontal overflow */
@@ -273,8 +364,8 @@ body.high-contrast-theme #sig-selector {
                 font-weight: bold;
                 padding: 4px;
                 border-radius: 4px 4px 0 0;
-                background-color: var(--inactive-strong);
-                color: var(--strong-font-color)
+                background-color: var(--msg-title-bg);
+                color: var(--msg-title-font)
             }
 
             .body-text {
@@ -285,8 +376,8 @@ body.high-contrast-theme #sig-selector {
                 overflow: hidden;
                 text-overflow: ellipsis;
                 border-radius: 0 0 4px 4px;
-                background-color: var(--inactive-light);
-                color: var(--light-font-color)
+                background-color: var(--msg-body-bg);
+                color: var(--msg-body-font)
             }
         }
 
@@ -294,11 +385,11 @@ body.high-contrast-theme #sig-selector {
             cursor: pointer;
 
             .title-text {
-                background-color: var(--active-strong);
+                background-color: var(--msg-title-bg-hover);
             }
 
             .body-text {
-                background-color: var(--active-light);
+                background-color: var(--msg-body-bg-hover);
             }
         }
 
@@ -307,22 +398,29 @@ body.high-contrast-theme #sig-selector {
             display: flex;
             gap: 2px;
 
+            /* edit svg uses fill, delete svg uses stroke...... oh well */
+            .msg-edit svg {
+                fill: var(--msg-controls-fill);
+            }
+            .msg-delete svg {
+                stroke: var(--msg-controls-fill);
+            }
+
             .msg-edit, .msg-delete {
                 display: flex;
                 width: 30px;
                 padding: 0;
-                background: var(--inactive-light);
-                border: 0px solid transparent;
+                background: var(--msg-controls-bg);
                 border-radius: 4px;
                 justify-content: center;
             }
 
             .msg-edit:hover, .msg-delete:hover {
-                background: var(--active-light);
+                background: var(--msg-controls-bg-hover);
             }
 
             .msg-edit:active, .msg-delete:active {
-                background: var(--active-strong);
+                background: var(--msg-controls-bg-active);
             }
 
             /* tooltip - disabled for now since it doesn't scroll properly */
@@ -342,10 +440,10 @@ body.high-contrast-theme #sig-selector {
                 opacity: 1;
             }
             .msg-edit:before {
-                content: 'Edit'
+                content: "Edit"
             }
             .msg-delete:before {
-                content: 'Delete'
+                content: "Delete"
             } */
         }
     }
@@ -355,17 +453,26 @@ body.high-contrast-theme #sig-selector {
     #section-addnew {
         display: flex;
         flex-direction: column;
-        color: var(--body-font-color);
+
+        label {
+            padding-bottom: 2px;
+        }
 
         input, textarea {
+            padding: 6px;
             margin-bottom: 8px;
+            border-radius: 6px;
+            background: var(--input-bg);
+            color: var(--input-font);
+            border: 1px solid var(--input-border);
         }
 
         textarea {
+            flex-grow: 1;
             overflow-y: auto;
             resize: none;
-            height: 160px;
-            scrollbar-color: var(--inactive-strong) white;
+            height: 150px;
+            scrollbar-color: var(--scrollbar-main) transparent;
         }
     }
 
@@ -374,14 +481,16 @@ body.high-contrast-theme #sig-selector {
         display: flex;
         gap: 10px;
         padding: 5px 20px;
-        border-top: 1px solid var(--border-color);
+        border-top: 1px solid var(--box-border);
     }
 
 
     button {
         cursor: pointer;
     }
+
 }
+
 `
 
 
@@ -406,11 +515,20 @@ function setRootVar(name, value) {
 }
 
 
-/* add our lovely css */
+/* add css */
 function addCSS() {
-    let style = document.createElement('style')
-    style.textContent = ALL_CSS
-    document.head.append(style)
+    let styleMsgbox = document.createElement('style')
+    styleMsgbox.textContent = CSS_MSGBOX_HEIGHT
+    styleMsgbox.id = 'sig-style-msgbox-height'
+
+    let styleAesthetics = document.createElement('style')
+    styleAesthetics.textContent = CSS_AESTHETICS
+    styleAesthetics.id = 'sig-style-aesthetics'
+
+    document.head.append(
+        styleMsgbox,
+        styleAesthetics
+    )
 }
 
 
@@ -944,7 +1062,7 @@ const sigSelector = {
         // })
         // handle.addEventListener('mousemove', () => {
         //     if (handle.classList.contains('moving')) {
-        //         console.log('movin around!')
+        //         console.debug('movin around!')
         //     }
         // })
 
@@ -1096,8 +1214,10 @@ const sigSelector = {
         let parent = document.getElementById(sigSelector.getSectionIDFromKey(VIEWS.templates))
         parent.textContent = ''  // wipe
 
-        // parse everything into elements
         const templates = sigStorage.readAllTemplates()
+        const nameOrder = sigStorage.readAllOrder()
+
+        // parse everything into elements
         let messageElms = new Map()
         Object.entries(templates).forEach((t) => {
             const name = t[0]
@@ -1109,7 +1229,6 @@ const sigSelector = {
         })
 
         // slap em in, in order
-        let nameOrder = sigStorage.readAllOrder()
         nameOrder.forEach((name) => {
             parent.append(messageElms.get(name))
         })
