@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        Template SMS for Google Messages
 // @description Save SMS templates within Google Messages
-// @version     1.0
+// @version     1.1
 // @updateURL   https://raw.githubusercontent.com/drylynch/template-sms-for-google-messages/main/template-sms.user.js
 // @downloadURL https://raw.githubusercontent.com/drylynch/template-sms-for-google-messages/main/template-sms.user.js
 // @icon        https://ssl.gstatic.com/android-messages-web/images/2022.3/2x/messages_2022_96dp.png
@@ -225,7 +225,7 @@ body.high-contrast-theme #sig-selector {
         display: flex;
         justify-content: center;
         align-items: center;
-        content: 'Click the 'Add New' button to add a new SMS template';
+        content: "Click the 'Add New' button to add a new SMS template";
         font-size: 1.2em;
         text-align: center;
         padding: 0 70px;
