@@ -872,7 +872,7 @@ const sigSelector = {
             let mouseUpOutside = aside.contains(event.target) ? false : true
             console.debug('mouseup outside: ' + mouseUpOutside)
             if (sigSelector.isVisible() && mouseDownOutside && mouseUpOutside) {
-                console.warn('CLOSING GUI')
+                console.debug('CLOSING GUI')
                 sigSelector.hide()
             }
         })
