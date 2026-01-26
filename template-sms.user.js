@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        Template SMS for Google Messages
 // @description Save SMS templates within Google Messages
-// @version     1.2
+// @version     1.3
 // @updateURL   https://raw.githubusercontent.com/drylynch/template-sms-for-google-messages/main/template-sms.user.js
 // @downloadURL https://raw.githubusercontent.com/drylynch/template-sms-for-google-messages/main/template-sms.user.js
 // @icon        https://ssl.gstatic.com/android-messages-web/images/2022.3/2x/messages_2022_96dp.png
@@ -11,12 +11,29 @@
 // @author      github.com/drylynch
 // ==/UserScript==
 
-// only tested on chrome but it should work in firefox..... probably......
 
-// setup trustedHTML so we can edit innerHTML in chrome
-const escapeHTMLPolicy = window.trustedTypes.createPolicy('forceInner', {
-    createHTML: (to_escape) => to_escape
-})
+/*
+
+    new in 1.3
+    - fix for firefox
+    - add export/import
+
+*/
+
+
+// setup trustedHTML so we can set innerHTML in chrome
+var escapeHTMLPolicy
+try {
+    escapeHTMLPolicy = window.trustedTypes.createPolicy('forceInner', {
+        createHTML: (to_escape) => to_escape
+    })
+} catch {
+    // no window.trustedTypes, just return a normal string for createHTML
+    console.debug('no window.trustedTypes, using default escapeHTMLPolicy')
+    escapeHTMLPolicy = {
+      createHTML: (string) => { return string }
+    }
+}
 
 // svg icons
 const SVG_SIGN_ICON = escapeHTMLPolicy.createHTML(
@@ -477,6 +494,25 @@ body.high-contrast-theme #sig-selector {
     }
 
 
+    /* settings */
+    #section-settings {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+
+        .settings-line {
+            display: flex;
+            flex-direction: row;
+            gap: 8px;
+        }
+
+        .settings-line > * {
+            flex-grow: 1;
+        }
+
+    }
+
+
     footer {
         display: flex;
         gap: 10px;
@@ -727,7 +763,7 @@ const sigStorage = {
     removeFromOrder: (oldEntry) => {
         let order = sigStorage.readAllOrder()
         order = order.filter((entry) => {
-            return entry != oldEntry
+            return entry !== oldEntry
         })
         sigStorage.writeAllOrder(order)
     },
@@ -822,22 +858,128 @@ const sigSelector = {
         sectionSettings.id = sigSelector.getSectionIDFromKey(VIEWS.settings)
         sectionSettings.style.display = 'none'
 
-        // placeholder
-        // sectionSettings.innerText = 'SETTINGS!!!!!!!!!!!!!!!!!!!!!'
-
+        // delete all saved template
         let settingsDeleteallButton = document.createElement('button')
         settingsDeleteallButton.innerText = 'Delete all templates'
         settingsDeleteallButton.classList.add(...classListButtonPrimary)
+        settingsDeleteallButton.style.backgroundColor = "var(--mat-select-invalid-arrow-color)"  // red (danger)
         settingsDeleteallButton.addEventListener('click', () => {
-            if (confirm('Really delete all templates? This cannot be undone.')) {
+            if (confirm('Deleting all templates cannot be undone.\nYou can export everything by using the Export button below.\nReally delete all templates?')) {
                 sigStorage.deleteAllTemplates()
                 sigStorage.deleteAllOrder()
                 sigSelector.showView(VIEWS.templates)
             }
         })
 
+        // parent for both buttons, so they're on the same line
+        let settingsImportExportLine = document.createElement('div')
+        settingsImportExportLine.classList.add('settings-line')
+
+        // export data
+        let settingsExportButton = document.createElement('button')
+        settingsExportButton.innerText = 'Export Templates'
+        settingsExportButton.classList.add(...classListButtonPrimary)
+        settingsExportButton.addEventListener('click', () => {
+            let outputObject = {
+                [sigStorage.KEY_TEMPLATES]: sigStorage.readAllTemplates(),
+                [sigStorage.KEY_ORDER]: sigStorage.readAllOrder(),
+            }
+            let outputText = JSON.stringify(outputObject, null, 2)
+            let link = document.createElement('a')
+            let file = new Blob([outputText], {type: 'text/json'})
+            link.href = URL.createObjectURL(file)
+            link.download = "SMS Templates for Google Messages.json"
+            link.click()
+        })
+
+        // import data
+        let settingsImportInput = document.createElement('input')
+        settingsImportInput.setAttribute('type', 'file')
+        settingsImportInput.setAttribute('accept', '.json')
+        settingsImportInput.style.display = 'none'
+        settingsImportInput.addEventListener('change', (event) => {
+            const fileList = event.target.files
+
+            // one file only please
+            if (!fileList || fileList.length !== 1) {
+                console.debug('no files or invalid number of files, ignoring')
+                return
+            }
+
+            // read it
+            let reader = new FileReader()
+            reader.readAsText(fileList[0])
+            reader.onload = () => {
+                // confirm first if user already has templates, since this will overwrite
+                if (
+                    sigStorage.readAllOrder().length
+                    && !confirm('Importing these templates will overwrite your existing ones.\nProceed?')
+                ) {
+                    return
+                }
+
+                let data = JSON.parse(reader.result)
+                let order = data[sigStorage.KEY_ORDER]
+                let templates = data[sigStorage.KEY_TEMPLATES]
+
+                // validate datatypes
+                if (
+                    (!order || !templates)  // both keys exist
+                    || !Array.isArray(order)  // order is the right type
+                    || typeof templates !== "object"  // templates is the right type (though this is very loosey goosey)
+                ) {
+                    alert('Invalid file, cannot import.')
+                    console.debug("invalid datatypes in import")
+                    return
+                }
+
+                // validate data: order items and template keys are a closed set
+                let validOrder = true
+                let validTemplates = true
+                order.forEach((title) => {
+                    if (!templates[title]) {
+                        validOrder = false
+                    }
+                })
+                Object.keys(templates).forEach((title) => {
+                    if (!order.includes(title)) {
+                        validTemplates = false
+                    }
+                })
+                if (!(validOrder && validTemplates)) {
+                    alert('Invalid file, cannot import.')
+                    console.debug("invalid keys in import")
+                    return
+                }
+
+                // assume everything else is fine lol
+                console.debug(`importing ${order.length} templates`)
+                sigStorage.writeAllOrder(order)
+                sigStorage.writeAllTemplates(templates)
+                sigSelector.showView(VIEWS.templates)
+            }
+
+            // reset input so we can import again
+            settingsImportInput.value = ''
+        })
+
+        // import button just clicks the hidden file input
+        let settingsImportButton = document.createElement('button')
+        settingsImportButton.innerText = 'Import Templates'
+        settingsImportButton.classList.add(...classListButtonPrimary)
+        settingsImportButton.addEventListener('click', () => {
+            settingsImportInput.click()
+        })
+
+        settingsImportExportLine.append(
+            settingsExportButton,
+            settingsImportButton,
+            settingsImportInput,
+        )
+
         sectionSettings.append(
-            settingsDeleteallButton
+            settingsDeleteallButton,
+            settingsImportExportLine
         )
 
 
@@ -877,6 +1019,7 @@ const sigSelector = {
         bodyLabel.innerText = 'Message Text'
         let bodyInput = document.createElement('textarea')
         bodyInput.id = 'sig-edit-body'
+        // update modified field on text entry
         bodyInput.addEventListener('input', () => {
             if (!modifiedInput.value) {
                 modifiedInput.value = '1'
@@ -908,10 +1051,6 @@ const sigSelector = {
                 || !modifiedInput.value  // nothing modified
                 || confirm('Discard changes?')  // user is cool with discarding changes
             ) {
-                nameInput.value = ''  // reset
-                bodyInput.value = ''
-                prevNameInput.value = ''
-                modifiedInput.value = ''
                 sigSelector.showView(VIEWS.templates)
                 return
             }
@@ -948,11 +1087,6 @@ const sigSelector = {
                 sigStorage.appendToOrder(newName)
             }
 
-            // reset and leave
-            nameInput.value = ''
-            bodyInput.value = ''
-            prevNameInput.value = ''
-            modifiedInput.value = ''
             sigSelector.showView(VIEWS.templates)
         })
 
@@ -1077,7 +1211,7 @@ const sigSelector = {
 
     /* true if the sig selector box is currently visible */
     isVisible: () => {
-        return document.getElementById(ID_SIGSELECTOR).style.display != 'none'
+        return document.getElementById(ID_SIGSELECTOR).style.display !== 'none'
     },
 
 
@@ -1183,6 +1317,8 @@ const sigSelector = {
         if (navkey === VIEWS.addnew) {
             document.getElementById('sig-edit-name').value = ''
             document.getElementById('sig-edit-body').value = ''
+            document.getElementById('sig-edit-prevname').value = ''
+            document.getElementById('sig-edit-modified').value = ''
         }
         // pull existing message data for editing
         else if (navkey === VIEWS.edit) {
@@ -1194,6 +1330,7 @@ const sigSelector = {
             document.getElementById('sig-edit-name').value = msgName
             document.getElementById('sig-edit-body').value = msgBody
             document.getElementById('sig-edit-prevname').value = msgName
+            document.getElementById('sig-edit-modified').value = ''
         }
         // refresh templates
         else if (navkey === VIEWS.templates) {
@@ -1240,6 +1377,7 @@ const sigSelector = {
 
 function main() {
     announceScript()
+
     addCSS()
 
     // listen for URL changes so we can insert our signature button
