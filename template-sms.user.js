@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        Template SMS for Google Messages
 // @description Save SMS templates within Google Messages
-// @version     1.3
+// @version     1.4
 // @updateURL   https://raw.githubusercontent.com/drylynch/template-sms-for-google-messages/main/template-sms.user.js
 // @downloadURL https://raw.githubusercontent.com/drylynch/template-sms-for-google-messages/main/template-sms.user.js
 // @icon        https://ssl.gstatic.com/android-messages-web/images/2022.3/2x/messages_2022_96dp.png
@@ -14,9 +14,8 @@
 
 /*
 
-    new in 1.3
-    - fix for firefox
-    - add export/import
+    new in 1.4
+    - tooltips!
 
 */
 
@@ -59,9 +58,6 @@ const ROOTVAR_TEXTAREA_HEIGHT = '--force-textarea-height-px'  // css root variab
 
 // mouse down state for checking if we should close the box
 var mouseDownOutside = false
-
-// html id for the sig selector elm
-const ID_SIGSELECTOR = 'sig-selector'
 
 // vanilla css classes we can add to our own buttons, piggyback on vanilla styles
 const classListButton = [
@@ -264,6 +260,9 @@ body.high-contrast-theme #sig-selector {
     .mdc-button {
         border: 1px black solid;
         box-shadow: none;
+    }
+    #sig-tooltip {
+        border: 1px solid black;
     }
 
 }
@@ -525,8 +524,17 @@ body.high-contrast-theme #sig-selector {
         cursor: pointer;
     }
 
-}
+    #sig-tooltip {
+        position: fixed;
+        pointer-events: none;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background-color: var(--msg-body-bg-hover);
+        color: var(--msg-controls-fill);;
+        font-weight: 500;
+    }
 
+}
 `
 
 
@@ -538,7 +546,7 @@ body.high-contrast-theme #sig-selector {
 
 /* say hello in console */
 function announceScript() {
-    console.log('%cSMS signatures extension loaded', 'background:black; color:skyblue;')
+    console.log(`%cSMS Templates v${GM_info.script.version} loaded`, 'background:black; color:skyblue;')
 }
 
 
@@ -788,6 +796,13 @@ const sigStorage = {
 /* popup box controller */
 const sigSelector = {
 
+    ID: 'sig-selector',  // element id
+
+    getElement: () => {
+        return document.getElementById(sigSelector.ID)
+    },
+
+
     /* return element ID for this view key */
     getSectionIDFromKey: (key) => {
         return `section-${key}`
@@ -800,7 +815,7 @@ const sigSelector = {
     /* birth */
     create: () => {
         let aside = document.createElement('aside')
-        aside.id = ID_SIGSELECTOR
+        aside.id = sigSelector.ID
         aside.style.display = 'none'  // start hidden, element's 'display:none' takes priority over injected stylesheet
 
         // navigation tabs
@@ -860,11 +875,11 @@ const sigSelector = {
 
         // delete all saved template
         let settingsDeleteallButton = document.createElement('button')
-        settingsDeleteallButton.innerText = 'Delete all templates'
+        settingsDeleteallButton.innerText = 'Delete all Templates'
         settingsDeleteallButton.classList.add(...classListButtonPrimary)
         settingsDeleteallButton.style.backgroundColor = "var(--mat-select-invalid-arrow-color)"  // red (danger)
         settingsDeleteallButton.addEventListener('click', () => {
-            if (confirm('Deleting all templates cannot be undone.\nYou can export everything by using the Export button below.\nReally delete all templates?')) {
+            if (confirm('You can export templates by using the Export feature in settings.\nDeleting all templates cannot be undone.\nReally delete all templates?')) {
                 sigStorage.deleteAllTemplates()
                 sigStorage.deleteAllOrder()
                 sigSelector.showView(VIEWS.templates)
@@ -1095,7 +1110,7 @@ const sigSelector = {
             btnConfirm
         )
 
-        // add everything to the main fell and throw him in the dom
+        // add everything to the main fella and throw him in the dom
         main.append(
             sectionTemplates,
             sectionSettings,
@@ -1115,12 +1130,12 @@ const sigSelector = {
         // this prevents accidentally closing the box when e.g. selecting text (inside) and mouse moves outside
         // it's a bit silly but it works
         document.addEventListener('mousedown', (event) => {
-            let aside = document.getElementById(ID_SIGSELECTOR)
+            let aside = sigSelector.getElement()
             mouseDownOutside = aside.contains(event.target) ? false : true
             console.debug('mousedown outside: ' + mouseDownOutside)
         })
         document.addEventListener('mouseup', (event) => {
-            let aside = document.getElementById(ID_SIGSELECTOR)
+            let aside = sigSelector.getElement()
             let mouseUpOutside = aside.contains(event.target) ? false : true
             console.debug('mouseup outside: ' + mouseUpOutside)
             if (sigSelector.isVisible() && mouseDownOutside && mouseUpOutside) {
@@ -1162,20 +1177,43 @@ const sigSelector = {
         let btnEdit = document.createElement('button')
         btnEdit.innerHTML = SVG_EDIT_ICON
         btnEdit.classList.add('msg-edit')
+        btnEdit.setAttribute('aria-label', 'Edit')
         btnEdit.addEventListener('click', () => {
             sigSelector.showView(VIEWS.edit, name)
+        })
+        // show tooltip on hover
+        btnEdit.addEventListener('mouseenter', () => {
+            tooltipController.showBesideElement(
+                btnEdit,
+                tooltipController.POSITIONS.above
+            )
+        })
+        btnEdit.addEventListener('mouseleave', () => {
+            tooltipController.hide()
         })
 
         // delete this message
         let btnDelete = document.createElement('button')
         btnDelete.innerHTML = SVG_DELETE_ICON
         btnDelete.classList.add('msg-delete')
+        btnDelete.setAttribute('aria-label', 'Delete')
         btnDelete.addEventListener('click', () => {
             if (confirm(`Really delete template '${name}'?`)) {
                 sigStorage.deleteTemplate(name)
                 sigStorage.removeFromOrder(name)
                 sigSelector.refreshTemplates()
+                tooltipController.hide()  // would remain visible otherwise, since mouse never leaves the element after it's deleted...
             }
+        })
+        // show tooltip on hover
+        btnDelete.addEventListener('mouseenter', () => {
+            tooltipController.showBesideElement(
+                btnDelete,
+                tooltipController.POSITIONS.above
+            )
+        })
+        btnDelete.addEventListener('mouseleave', () => {
+            tooltipController.hide()
         })
 
         msgControls.append(
@@ -1211,14 +1249,14 @@ const sigSelector = {
 
     /* true if the sig selector box is currently visible */
     isVisible: () => {
-        return document.getElementById(ID_SIGSELECTOR).style.display !== 'none'
+        return sigSelector.getElement().style.display !== 'none'
     },
 
 
     /* hello */
     show: () => {
         sigSelector.updateLocation()
-        document.getElementById(ID_SIGSELECTOR).style.display = ''
+        sigSelector.getElement().style.display = ''
         // add the 'open' class to button while open, which prevents the button from being clicked again (vanilla behaviour)
         // useful cause our stupid button will re-open immediately if you click the button to close it...
         Array.from(document.getElementsByClassName('signature-button')).forEach((elm) => {
@@ -1229,20 +1267,19 @@ const sigSelector = {
 
     /* byebye */
     hide: () => {
-        document.getElementById(ID_SIGSELECTOR).style.display = 'none'
+        sigSelector.getElement().style.display = 'none'
         Array.from(document.getElementsByClassName('signature-button')).forEach((elm) => {
             elm.classList.remove('open')
         })
-        // closeAttempts = 0  // reset
     },
 
 
     /* set location to the right place, based on parent row of buttons */
     updateLocation: () => {
-        let aside = document.getElementById(ID_SIGSELECTOR)
+        let aside = sigSelector.getElement()
 
         // bounds of button parent, who we'll be sitting relative to
-        let bounds = document.querySelectorAll('.inline-compose-buttons.ng-star-inserted')[0].getBoundingClientRect()
+        let bounds = document.querySelector('.inline-compose-buttons.ng-star-inserted').getBoundingClientRect()
 
         // inline buttons currently onscreen
         if (bounds.left > 0) {
@@ -1257,7 +1294,7 @@ const sigSelector = {
 
         // stacked buttons onscreen (smaller window)
         else {
-            bounds = document.querySelectorAll('.stacked-compose-buttons.ng-star-inserted')[0].getBoundingClientRect()
+            bounds = document.querySelector('.stacked-compose-buttons.ng-star-inserted').getBoundingClientRect()
             // sit directly on top of the button parent
             let bottom = window.innerHeight - bounds.top + 5 // lil 5px margin on bottom
             let left = bounds.left
@@ -1373,6 +1410,135 @@ const sigSelector = {
 }
 
 
+/* control that tooltip */
+const tooltipController = {
+
+    // tooltip elm id
+    ID: 'sig-tooltip',
+
+    // possible tooltip positions relative to a parent elm
+    POSITIONS: {
+        above: 'above',
+        below: 'below',
+        left: 'left',
+        right: 'right'
+    },
+
+    /* place tooltip on page */
+    init: () => {
+        let tooltip = document.createElement('div')
+        tooltip.id = tooltipController.ID
+        tooltip.style.display = 'none'
+        sigSelector.getElement().append(tooltip)
+        // sigSelector.getElement().insertAdjacentElement('afterbegin', tooltip)
+        console.debug('tooltip initialised')
+    },
+
+    /* show/hide tooltip */
+    show: () => {
+        document.getElementById(tooltipController.ID).style.display = ''
+    },
+    hide: () => {
+        document.getElementById(tooltipController.ID).style.display = 'none'
+    },
+
+    /* change text shown on tooltip */
+    setLabel: (label) => {
+        let tooltip = document.getElementById(tooltipController.ID)
+        tooltip.innerText = label
+    },
+
+    /* display this tooltip at given position beside parent element */
+    showBesideElement: (parentElement, position) => {
+        // validate position
+        if (!Object.values(tooltipController.POSITIONS).includes(position)) {
+            throw(`tooltip showBesideElement - invalid position: ${position}`)
+        }
+
+        // set tooltip label from the parent elm's aria-label. gotta do this before finding the bounds so element's size is properly updated
+        const label = parentElement.getAttribute('aria-label')
+        if (!label) {
+            throw(`tooltip showBesideElement - parent element must contain aria-label attribute to display on tooltip!`)
+        }
+        tooltipController.setLabel(label)
+
+        // get bounds of both elms so we can center them properly
+        const boundsParent = parentElement.getBoundingClientRect()
+        let tooltip = document.getElementById(tooltipController.ID)
+        // tooltip element will have all zero bounds if display=none, so send it offscreen and unhide it for a sec so we can get its real dimensions
+        // moving offscreen isn't strictly necessary (i see no flashing without it) but oh well
+        tooltip.left = -1000
+        tooltip.top = -1000
+        tooltip.style.display = ''
+        const boundsTooltip = tooltip.getBoundingClientRect()
+        tooltip.style.display = 'none'
+
+        // find x,y for this position
+        let x
+        let y
+        const gap = 4  // little gap between tooltip and parent
+        if (position === tooltipController.POSITIONS.above) {
+            // center parent x
+            x = (
+                boundsParent.x
+                + (boundsParent.width / 2)
+                - (boundsTooltip.width / 2)
+            )
+            // above parent y
+            y = (
+                boundsParent.y
+                - boundsTooltip.height
+                - gap
+            )
+        } else if (position === tooltipController.POSITIONS.below) {
+            // center parent x
+            x = (
+                boundsParent.x
+                + (boundsParent.width / 2)
+                - (boundsTooltip.width / 2)
+            )
+            // below parent y
+            y = (
+                boundsParent.y
+                + boundsParent.height
+                + gap
+            )
+        } else if (position === tooltipController.POSITIONS.left) {
+            // left parent x
+            x = (
+                boundsParent.x
+                - boundsTooltip.width
+                - gap
+            )
+            // center parent y
+            y = (
+                boundsParent.y
+                + (boundsParent.height / 2)
+                - (boundsTooltip.height / 2)
+            )
+        } else if (position === tooltipController.POSITIONS.right) {
+            // right parent x
+            x = (
+                boundsParent.x
+                + boundsParent.width
+                + gap
+            )
+            // center parent y
+            y = (
+                boundsParent.y
+                + (boundsParent.height / 2)
+                - (boundsTooltip.height / 2)
+            )
+        }
+
+        // show it
+        tooltip.style.left = `${x}px`
+        tooltip.style.top = `${y}px`
+        tooltipController.show()
+    },
+}
+
+
 
 
 function main() {
@@ -1388,6 +1554,9 @@ function main() {
 
     // add the box, initially hidden
     sigSelector.create()
+
+    // add our tooltip
+    tooltipController.init()
 }
 
 main()
