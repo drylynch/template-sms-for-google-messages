@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        Template SMS for Google Messages
 // @description Save SMS templates within Google Messages
-// @version     1.4
+// @version     1.5
 // @updateURL   https://raw.githubusercontent.com/drylynch/template-sms-for-google-messages/main/template-sms.user.js
 // @downloadURL https://raw.githubusercontent.com/drylynch/template-sms-for-google-messages/main/template-sms.user.js
 // @icon        https://ssl.gstatic.com/android-messages-web/images/2022.3/2x/messages_2022_96dp.png
@@ -14,8 +14,9 @@
 
 /*
 
-    new in 1.4
-    - tooltips!
+    new in 1.5
+    - fix template entry not working after google messages update
+    - new setting to set height of message box
 
 */
 
@@ -53,8 +54,7 @@ const SVG_DELETE_ICON = escapeHTMLPolicy.createHTML(
 )
 
 // force reply box height
-var msgboxHeight = 160  // height in px
-const ROOTVAR_TEXTAREA_HEIGHT = '--force-textarea-height-px'  // css root variable
+const DEFAULT_MSGBOX_HEIGHT = 160  // height in px
 
 // mouse down state for checking if we should close the box
 var mouseDownOutside = false
@@ -86,7 +86,7 @@ const VIEWS = {
 
 // styles
 const CSS_MSGBOX_HEIGHT = `:root {
-    --force-textarea-height-px: ${msgboxHeight}px;
+    /* --force-textarea-height-px: ${DEFAULT_MSGBOX_HEIGHT}px; */
     --bottom-anchor-offset-inline: 45px;
     --bottom-anchor-offset-stacked: 90px;
 }
@@ -550,29 +550,68 @@ function announceScript() {
 }
 
 
-/* get/set css root variables */
-function getRootVar(name) {
-    return getComputedStyle(document.querySelector(':root')).getPropertyValue(name)
-}
-function setRootVar(name, value) {
-    document.querySelector(':root').style.setProperty(name, value)
-}
+/* css manager */
+const styleManager = {
 
+    /* element IDs */
+    IDS: {
+        msgboxHeight: 'sig-style-messagebox-height',
+        aesthetics: 'sig-style-aesthetics'
+    },
 
-/* add css */
-function addCSS() {
-    let styleMsgbox = document.createElement('style')
-    styleMsgbox.textContent = CSS_MSGBOX_HEIGHT
-    styleMsgbox.id = 'sig-style-msgbox-height'
+    /* map ids to actual css */
+    CSS: {
+        ['sig-style-messagebox-height']: CSS_MSGBOX_HEIGHT,
+        ['sig-style-aesthetics']: CSS_AESTHETICS,
+    },
 
-    let styleAesthetics = document.createElement('style')
-    styleAesthetics.textContent = CSS_AESTHETICS
-    styleAesthetics.id = 'sig-style-aesthetics'
+    init() {
+        const msgboxSettings = sigStorage.readMsgboxSettings()
+        if (msgboxSettings.enabled) {
+            styleManager.addStyle(styleManager.IDS.msgboxHeight)
+            styleManager.setMsgboxHeightRootVariable(msgboxSettings.height)
+        }
+        styleManager.addStyle(styleManager.IDS.aesthetics)
+    },
 
-    document.head.append(
-        styleMsgbox,
-        styleAesthetics
-    )
+    /* add style to head */
+    addStyle(id) {
+        if (!Object.values(styleManager.IDS).includes(id)) {
+            throw(`add style - unknown style ID: ${id}`)
+        }
+        console.debug(`adding style id '${id}'`)
+        let style = document.createElement('style')
+        style.textContent = styleManager.CSS[id]
+        style.id = id
+        document.head.append(style)
+    },
+
+    /* remove style from head */
+    removeStyle(id) {
+        if (!Object.values(styleManager.IDS).includes(id)) {
+            throw(`remove style - unknown style ID: ${id}`)
+        }
+        let style = document.getElementById(id)
+        if (style) {
+            console.debug(`removing style id '${id}'`)
+            style.remove()
+        } else {
+            console.debug(`can't find style elm with id '${id}' to remove, ignoring`)
+        }
+    },
+
+    /* get/set css root variables */
+    getRootVar(name) {
+        return getComputedStyle(document.querySelector(':root')).getPropertyValue(name)
+    },
+    setRootVar(name, value) {
+        document.querySelector(':root').style.setProperty(name, value)
+    },
+
+    setMsgboxHeightRootVariable(value) {
+        const variable = '--force-textarea-height-px'
+        styleManager.setRootVar(variable, `${value}px`)
+    },
 }
 
 
@@ -583,7 +622,7 @@ function addCSS() {
 
 /* add button to message pages */
 async function urlChangeCallback() {
-    // the new navigation api seems to work too fast for this website
+    // the navigation api seems to work too fast for this website (on my machine)
     // without a timeout, this feeds us the LAST location.href we visited, since location seems to get updated AFTER this callback...
     // this short delay fixes it. probably. could bump it up to a few hundred ms if we're really worried about it but 50 works fine
     await new Promise(r => setTimeout(r, 50))
@@ -686,14 +725,23 @@ async function addSignatureButtons() {
 
 /* slap that text in there */
 function setMessageContent(message) {
-    // add message to input
-    let textarea = document.getElementsByTagName('textarea')[0]
-    textarea.value = message
+    // find text entry elm
+    let textboxes = document.querySelectorAll("[role='textbox']")
+    if (textboxes.length !== 1) {
+        console.error("found a weird number of textboxes when trying to set message content!", textboxes)
+        return
+    }
+    let textbox = textboxes[0]
+
+    // vanilla multiline messages are now split into multiple divs...
+    // but it seems to work fine without us also doing that. idk if this will need to be changed in the future
+    // seems to be fine to just slap it right in there. if it ain't broke \o/
+    textbox.innerText = message
 
     // simulate text input so the vanilla js updates size of textarea elm
     // not necessary if we're forcing the size of the textarea but hey it's whatever
     const inputEvent = new Event('input', {'bubbles':true, 'cancelable':false})
-    textarea.dispatchEvent(inputEvent)
+    textbox.dispatchEvent(inputEvent)
 }
 
 
@@ -784,7 +832,41 @@ const sigStorage = {
             order[index] = newEntry
         }
         sigStorage.writeAllOrder(order)
+    },
+
+
+    KEY_MSGBOX_HEIGHT: 'sigselector-msgboxheight',
+
+    /* read settings from storage. return { enabled: boolean, height: int } obj */
+    readMsgboxSettings: () => {
+        let settings = JSON.parse(localStorage.getItem(sigStorage.KEY_MSGBOX_HEIGHT))
+        if (!settings) {
+            settings = {
+                'enabled': true,
+                'height': DEFAULT_MSGBOX_HEIGHT
+            }
+        }
+        return settings
+    },
+
+    /* write settings to storage. all optional */
+    writeMsgboxSettings: (enabled=null, height=null) => {
+        // use existing settings for anything not given
+        const settingsOld = sigStorage.readMsgboxSettings()
+        if (null === enabled) {
+            enabled = settingsOld.enabled
+        }
+        if (null === height) {
+            height = settingsOld.height
+        }
+        // write updated settings
+        const settingsNew = {
+            'enabled': enabled,
+            'height': height
+        }
+        localStorage.setItem(sigStorage.KEY_MSGBOX_HEIGHT, JSON.stringify(settingsNew))
     }
+
 }
 
 
@@ -813,7 +895,7 @@ const sigSelector = {
 
 
     /* birth */
-    create: () => {
+    init: () => {
         let aside = document.createElement('aside')
         aside.id = sigSelector.ID
         aside.style.display = 'none'  // start hidden, element's 'display:none' takes priority over injected stylesheet
@@ -992,9 +1074,60 @@ const sigSelector = {
             settingsImportInput,
         )
 
+        // toggle msgbox forced height + adjust height
+        let settingsMsgboxHeightLine = document.createElement('div')
+        settingsMsgboxHeightLine.classList.add('settings-line')
+
+        let settingsMsgboxHeightLabel = document.createElement('div')
+        settingsMsgboxHeightLabel.innerText = "Force reply box height"
+
+        const currentSettings = sigStorage.readMsgboxSettings()
+
+        let settingsMsgboxHeightToggle = document.createElement('input')
+        settingsMsgboxHeightToggle.type = 'checkbox'
+        settingsMsgboxHeightToggle.checked = currentSettings.enabled
+        settingsMsgboxHeightToggle.addEventListener('change', async () => {
+            const enabled = settingsMsgboxHeightToggle.checked
+            if (enabled) {
+                styleManager.addStyle(styleManager.IDS.msgboxHeight)
+                styleManager.setMsgboxHeightRootVariable(sigStorage.readMsgboxSettings().height)
+            } else {
+                styleManager.removeStyle(styleManager.IDS.msgboxHeight)
+            }
+            sigStorage.writeMsgboxSettings(enabled, null)
+            await new Promise(r => setTimeout(r, 10))  // real height doesn't update super fast, so chill a bit
+            sigSelector.updatePosition()
+        })
+
+        let settingsMsgboxHeightPixels = document.createElement('input')
+        settingsMsgboxHeightPixels.type = 'number'
+        settingsMsgboxHeightPixels.min = 100
+        settingsMsgboxHeightPixels.max = 300
+        settingsMsgboxHeightPixels.step = 10
+        settingsMsgboxHeightPixels.value = currentSettings.height
+        // update height on change
+        settingsMsgboxHeightPixels.addEventListener('change', () => {
+            let value = settingsMsgboxHeightPixels.value
+            if (value < 100) {
+                value = 100
+            } else if (value > 300) {
+                value = 300
+            }
+            sigStorage.writeMsgboxSettings(null, value)
+            styleManager.setMsgboxHeightRootVariable(value)
+            sigSelector.updatePosition()
+        })
+
+        settingsMsgboxHeightLine.append(
+            settingsMsgboxHeightLabel,
+            settingsMsgboxHeightToggle,
+            settingsMsgboxHeightPixels
+        )
+
         sectionSettings.append(
             settingsDeleteallButton,
-            settingsImportExportLine
+            settingsImportExportLine,
+            settingsMsgboxHeightLine
         )
 
 
@@ -1255,7 +1388,7 @@ const sigSelector = {
 
     /* hello */
     show: () => {
-        sigSelector.updateLocation()
+        sigSelector.updatePosition()
         sigSelector.getElement().style.display = ''
         // add the 'open' class to button while open, which prevents the button from being clicked again (vanilla behaviour)
         // useful cause our stupid button will re-open immediately if you click the button to close it...
@@ -1274,8 +1407,8 @@ const sigSelector = {
     },
 
 
-    /* set location to the right place, based on parent row of buttons */
-    updateLocation: () => {
+    /* set position to the right place, based on parent row of buttons */
+    updatePosition: () => {
         let aside = sigSelector.getElement()
 
         // bounds of button parent, who we'll be sitting relative to
@@ -1544,19 +1677,16 @@ const tooltipController = {
 function main() {
     announceScript()
 
-    addCSS()
+    // initialise our friends
+    styleManager.init()  // css
+    sigSelector.init()  // templates popup
+    tooltipController.init()  // tooltip
 
-    // listen for URL changes so we can insert our signature button
+    // listen for URL changes so we can insert our signature button to conversations
     navigation.addEventListener('navigate', urlChangeCallback)
 
-    // update location on window resize
-    window.addEventListener('resize', sigSelector.updateLocation)
-
-    // add the box, initially hidden
-    sigSelector.create()
-
-    // add our tooltip
-    tooltipController.init()
+    // update popup box position on window resize
+    window.addEventListener('resize', sigSelector.updatePosition)
 }
 
 main()
